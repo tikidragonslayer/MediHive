@@ -24,11 +24,30 @@ Healthcare IT has four chronic failures:
 
 MediHive addresses all four with a six-layer architecture that **bolts onto existing EHR systems via FHIR R4** rather than replacing them, so a hospital can adopt incrementally.
 
+## Choose your profile
+
+MediHive runs in one of two profiles. Same application code, same FHIR
+adapter, same AI scribe — only the underlying vault differs.
+
+| | `local` | `onchain` |
+|---|---|---|
+| Backend | PostgreSQL | Solana + IPFS/Arweave |
+| Wallet required | No | Yes |
+| Cross-hospital portability | Manual FHIR export | Native |
+| Patient-side revocation | Via portal | Via wallet |
+| Tamper-evident audit | Hash-chained + WORM checkpoint | On-chain |
+| Best for | Most hospitals starting today | Sovereign-records pilots |
+| Quick start | `docker compose -f infra/docker-compose.local.yml up` | See `docs/profiles.md` |
+
+Set `MEDIHIVE_PROFILE=local` or `MEDIHIVE_PROFILE=onchain` at process start.
+Both profiles are first-class. See [`docs/profiles.md`](docs/profiles.md)
+for a full comparison and the HIPAA technical safeguards story.
+
 ## Architecture
 
 | Layer | Package | What it does |
 |-------|---------|--------------|
-| **MediVault** | `vault-programs`, `vault-sdk` | Solana programs (Anchor) for patient passport, record manager, access grants, consent registry, audit log. Stores hashes and access control on-chain; PHI lives encrypted off-chain. |
+| **VaultDriver** | `vault-driver`, `local-vault`, `vault-programs`, `vault-sdk` | Profile-agnostic interface (`vault-driver`) with two implementations: `local-vault` (Postgres + hash-chained audit) and `vault-sdk`/`vault-programs` (Solana). The rest of MediHive depends only on the interface. |
 | **MediBridge** | `bridge-core`, `bridge-fhir-adapter` | FHIR R4 middleware that maps to/from Epic, Cerner, MEDITECH. |
 | **MediBrain** | `brain-engine` | NEWS2 acuity scoring, zone-aware nurse routing, contextual alert triage to reduce alarm fatigue. |
 | **MediScribe** | `scribe-asr`, `scribe-nlp` | Whisper-based ambient transcription + structured SOAP/FHIR note generation. Audio stays on-prem. |

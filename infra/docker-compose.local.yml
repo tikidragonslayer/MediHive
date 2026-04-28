@@ -1,0 +1,71 @@
+# MediHive Local Profile — one-command on-prem deployment
+#
+# Use this when you want MediHive without the Solana on-chain layer.
+# Patients still own their encryption keys (Shamir 3-of-5), records are
+# still stored encrypted, and the audit log is still tamper-evident
+# (hash-chained + nightly WORM export). Drop-in for hospitals that need
+# HIPAA technical safeguards but are not ready for on-chain anchoring.
+#
+# Quick start:
+#   docker compose -f infra/docker-compose.local.yml up -d
+#   docker compose -f infra/docker-compose.local.yml exec api npm run migrate --workspace=@medi-hive/local-vault
+#   open http://localhost:3000
+#
+# DO NOT deploy this configuration to a production clinical environment
+# without independent security review, HIPAA compliance audit, and a
+# signed BAA with all involved parties. See SECURITY.md.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: medihive-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: medihive
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+      POSTGRES_DB: medihive
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medihive -d medihive"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    container_name: medihive-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MEDIHIVE_PROFILE: local
+      DATABASE_URL: postgres://medihive:${POSTGRES_PASSWORD:-changeme_in_production}@postgres:5432/medihive
+      NODE_ENV: production
+      PORT: 4000
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      args:
+        WORKSPACE: pulse-dashboard
+    container_name: medihive-dashboard
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  postgres-data:
+    driver: local

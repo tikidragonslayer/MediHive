@@ -1,0 +1,26 @@
+{
+  "name": "@medi-hive/local-vault",
+  "version": "0.1.0",
+  "description": "Postgres-backed VaultDriver implementation for on-prem MediHive deployments. No blockchain required.",
+  "license": "AGPL-3.0-or-later",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "migrate": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "@medi-hive/vault-driver": "0.1.0",
+    "pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.7.0",
+    "vitest": "^1.4.0"
+  }
+}
