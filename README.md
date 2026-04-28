@@ -1,5 +1,11 @@
 # MediHive
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Version](https://img.shields.io/badge/version-0.2.0-informational)](CHANGELOG.md)
+[![Profile: local](https://img.shields.io/badge/profile-local-success)](docs/profiles.md)
+[![Profile: onchain](https://img.shields.io/badge/profile-onchain-blueviolet)](docs/profiles.md)
+[![CI](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml/badge.svg)](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml)
+
 **Self-hostable hospital records where the patient holds the keys.**
 
 FHIR R4 + AI medical scribe + Solana-anchored access control. AGPL-3.0.
