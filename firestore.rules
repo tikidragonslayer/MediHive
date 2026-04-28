@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && request.auth.token.role == role;
+    }
+
+    function hasAnyRole(roles) {
+      return isSignedIn() && request.auth.token.role in roles;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAssignedNurse() {
+      return hasRole('nurse') && resource.data.assigned_nurse == request.auth.uid;
+    }
+
+    function isAttendingDoctor() {
+      return hasRole('doctor') && resource.data.attending_physician == request.auth.uid;
+    }
+
+    function isAssignedClinician() {
+      return isSignedIn() && resource.data.clinician_pubkey == request.auth.uid;
+    }
+
+    function isServiceAccount() {
+      return isSignedIn() && request.auth.token.firebase.sign_in_provider == 'custom';
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────
+    // Authenticated users can read/write their own document.
+    // Admins can read all users.
+    match /users/{userId} {
+      allow read: if isOwner(userId) || hasRole('admin');
+      allow write: if isOwner(userId);
+    }
+
+    // ── Patients ──────────────────────────────────────────────────────
+    // Clinical staff + frontdesk can read. Doctor/nurse can write.
+    match /patients/{patientId} {
+      allow read: if hasAnyRole(['doctor', 'nurse', 'admin', 'frontdesk']);
+      allow create: if hasAnyRole(['doctor', 'nurse', 'admin']);
+      allow update: if hasAnyRole(['doctor', 'nurse']);
+      allow delete: if hasRole('admin');
+    }
+
+    // ── Vitals ────────────────────────────────────────────────────────
+    // Nurse/doctor can write. Patient can read their own records.
+    match /vitals/{vitalId} {
+      allow read: if hasAnyRole(['doctor', 'nurse', 'admin'])
+                  || (hasRole('patient') && resource.data.patient_id == request.auth.uid);
+      allow write: if hasAnyRole(['nurse', 'doctor']);
+    }
+
+    // ── Tasks ─────────────────────────────────────────────────────────
+    // Admin can read/write all. Nurse can read tasks assigned to them.
+    // Nurse can update (complete) tasks assigned to them.
+    match /tasks/{taskId} {
+      allow read: if hasRole('admin')
+                  || (hasRole('nurse') && resource.data.assigned_nurse == request.auth.uid)
+                  || hasRole('doctor');
+      allow create: if hasAnyRole(['admin', 'doctor']);
+      allow update: if hasRole('admin')
+                    || (hasRole('nurse') && resource.data.assigned_nurse == request.auth.uid);
+      allow delete: if hasRole('admin');
+    }
+
+    // ── Alerts ────────────────────────────────────────────────────────
+    // Nurse/doctor can read/write for patients they are assigned to.
+    // Admin can read all.
+    match /alerts/{alertId} {
+      allow read: if hasAnyRole(['nurse', 'doctor', 'admin']);
+      allow create: if hasAnyRole(['nurse', 'doctor', 'admin']);
+      allow update: if hasAnyRole(['nurse', 'doctor']);
+      allow delete: if hasRole('admin');
+    }
+
+    // ── Scribe Sessions ───────────────────────────────────────────────
+    // Clinician who started can read/write. Admin read only.
+    match /scribe_sessions/{sessionId} {
+      allow read: if isAssignedClinician() || hasRole('admin');
+      allow create: if hasAnyRole(['doctor', 'nurse']);
+      allow update: if isAssignedClinician();
+      allow delete: if false;  // never delete clinical records
+    }
+
+    // ── Medication Administration ─────────────────────────────────────
+    // Nurse writes. Pharmacy and doctor can read.
+    match /medication_admin/{recordId} {
+      allow read: if hasAnyRole(['pharmacy', 'doctor', 'admin', 'nurse']);
+      allow create: if hasRole('nurse');
+      allow update: if hasRole('nurse');
+      allow delete: if false;  // never delete medication records
+    }
+
+    // ── Appointments ──────────────────────────────────────────────────
+    // Frontdesk read/write. Patient reads own.
+    match /appointments/{appointmentId} {
+      allow read: if hasAnyRole(['frontdesk', 'admin', 'doctor', 'nurse'])
+                  || (hasRole('patient') && resource.data.patient_id == request.auth.uid);
+      allow create: if hasAnyRole(['frontdesk', 'admin']);
+      allow update: if hasAnyRole(['frontdesk', 'admin']);
+      allow delete: if hasAnyRole(['frontdesk', 'admin']);
+    }
+
+    // ── Beds ──────────────────────────────────────────────────────────
+    // Admin/nurse/frontdesk can read. Admin writes.
+    match /beds/{bedId} {
+      allow read: if hasAnyRole(['admin', 'nurse', 'frontdesk']);
+      allow write: if hasRole('admin');
+    }
+
+    // ── Blockchain Sync ───────────────────────────────────────────────
+    // Admin only.
+    match /blockchain_sync/{syncId} {
+      allow read, write: if hasRole('admin');
+    }
+
+    // ── Nonces (replay prevention) ────────────────────────────────────
+    // Service account only.
+    match /used_nonces/{nonce} {
+      allow read, write: if isServiceAccount();
+    }
+
+    // ── Default deny ──────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@medi-hive/shield-encryption",
+  "version": "0.1.0",
+  "description": "MediShield — BIP-44 HD keys, Shamir secret sharing, Proxy Re-Encryption",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.95.0",
+    "ed2curve": "^0.3.0",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "vitest": "^3.1.1"
+  }
+}

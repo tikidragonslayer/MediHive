@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+target/
+.anchor/
+test-ledger/
+__pycache__/
+*.pyc
+.venv/
+*.so
+*.dylib
+*.dll
+.DS_Store
+Thumbs.db

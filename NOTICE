@@ -1,0 +1,24 @@
+MediHive
+Copyright (C) 2024-2026 The MediHive Authors
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License, version 3, as
+published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public
+License (LICENSE) for more details.
+
+If you modify this software and run it as a network service, the AGPL-3.0
+requires you to make the modified source code available to the users of
+that service. See https://www.gnu.org/licenses/agpl-3.0.html for details.
+
+---
+
+Project history: This codebase was originally developed privately by
+TechEasyIT, LLC (https://techeasyit.com) and released to the open-source
+community under the GNU Affero General Public License v3.0.
+
+Subsequent contributions by individual authors and the broader community
+are licensed under the same AGPL-3.0 unless otherwise noted.

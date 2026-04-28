@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  api-server:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - FIRESTORE_EMULATOR_HOST=firebase-emulators:8080
+      - FIREBASE_AUTH_EMULATOR_HOST=firebase-emulators:9099
+    depends_on:
+      firebase-emulators:
+        condition: service_healthy
+
+  firebase-emulators:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ..:/app
+    ports:
+      - "4001:4000"
+      - "8080:8080"
+      - "9099:9099"
+    command: >
+      sh -c "npm install -g firebase-tools &&
+             firebase emulators:start
+             --only firestore,auth,functions
+             --project demo-medi-hive"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5

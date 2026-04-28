@@ -1,0 +1,20 @@
+{
+  "name": "@medi-hive/scribe-nlp",
+  "version": "0.1.0",
+  "description": "MediScribe — AI medical transcription and SOAP note generation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@medi-hive/vault-sdk": "file:../vault-sdk",
+    "@medi-hive/bridge-core": "file:../bridge-core",
+    "@anthropic-ai/sdk": "^0.39.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

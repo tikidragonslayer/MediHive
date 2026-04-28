@@ -1,0 +1,38 @@
+{
+  "name": "medihive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hostable hospital records where the patient holds the keys. FHIR R4 + AI medical scribe + Solana-anchored access control.",
+  "license": "AGPL-3.0-or-later",
+  "homepage": "https://github.com/tikidragonslayer/MediHive",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tikidragonslayer/MediHive.git"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npx vitest run --passWithNoTests",
+    "dev": "npm run dev --workspace=packages/api-server",
+    "seed": "npx tsx scripts/seed/index.ts",
+    "deploy": "bash scripts/deploy/deploy.sh",
+    "lint": "npx tsc --noEmit --workspaces --if-present",
+    "clean": "npx rimraf packages/*/dist",
+    "build:programs": "cd packages/vault-programs && anchor build",
+    "test:programs": "cd packages/vault-programs && anchor test",
+    "build:sdk": "cd packages/vault-sdk && npm run build",
+    "build:dashboard": "cd packages/pulse-dashboard && npm run build",
+    "dev:dashboard": "cd packages/pulse-dashboard && npm run dev"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "protobufjs": "^7.5.5"
+  },
+  "dependencies": {
+    "protobufjs": "^7.5.5"
+  }
+}
