@@ -11,6 +11,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@medi-hive/brain-engine": "file:../brain-engine",
+    "@medi-hive/local-vault": "file:../local-vault",
+    "@medi-hive/vault-driver": "file:../vault-driver",
     "@hono/node-server": "^1.11.0",
     "@solana/web3.js": "^1.95.0",
     "dotenv": "^16.4.0",
