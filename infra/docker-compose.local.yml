@@ -8,8 +8,9 @@
 #
 # Quick start:
 #   docker compose -f infra/docker-compose.local.yml up -d
-#   docker compose -f infra/docker-compose.local.yml exec api npm run migrate --workspace=@medi-hive/local-vault
-#   open http://localhost:3000
+#   docker compose -f infra/docker-compose.local.yml exec api \
+#     npm run migrate:built --workspace=@medi-hive/local-vault
+#   curl http://localhost:4000/health
 #
 # DO NOT deploy this configuration to a production clinical environment
 # without independent security review, HIPAA compliance audit, and a
@@ -51,20 +52,11 @@ services:
     ports:
       - "127.0.0.1:4000:4000"
 
-  dashboard:
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile
-      args:
-        WORKSPACE: pulse-dashboard
-    container_name: medihive-dashboard
-    restart: unless-stopped
-    depends_on:
-      - api
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000
-    ports:
-      - "127.0.0.1:3000:3000"
+  # The pulse-dashboard (Next.js) is intentionally not in this compose
+  # file yet. It needs its own Dockerfile (Next.js standalone output +
+  # different runtime entrypoint), which is tracked as a follow-up.
+  # For now, run it locally during development:
+  #   npm run dev:dashboard
 
 volumes:
   postgres-data:
