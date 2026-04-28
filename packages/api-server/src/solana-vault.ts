@@ -66,86 +66,86 @@ export class SolanaVaultDriver implements VaultDriver {
 
   // --- Patient passports ---
   createPassport(_: CreatePassportInput): Promise<PatientPassport> {
-    NOT_YET('createPassport');
+    return NOT_YET('createPassport');
   }
   getPassport(_: Identity): Promise<PatientPassport | null> {
-    NOT_YET('getPassport');
+    return NOT_YET('getPassport');
   }
   setPassportStatus(_: Identity, __: PassportStatus, ___: Identity): Promise<PatientPassport> {
-    NOT_YET('setPassportStatus');
+    return NOT_YET('setPassportStatus');
   }
   rotatePassportEncryptionKey(_: Identity, __: string, ___: Identity): Promise<PatientPassport> {
-    NOT_YET('rotatePassportEncryptionKey');
+    return NOT_YET('rotatePassportEncryptionKey');
   }
 
   // --- Medical records ---
   createRecord(_: CreateRecordInput): Promise<MedicalRecord> {
-    NOT_YET('createRecord');
+    return NOT_YET('createRecord');
   }
   getRecord(_: Identity): Promise<MedicalRecord | null> {
-    NOT_YET('getRecord');
+    return NOT_YET('getRecord');
   }
   listRecordsForPatient(
     _: Identity,
     __?: { types?: RecordType[]; limit?: number; cursor?: string },
   ): Promise<{ records: MedicalRecord[]; nextCursor: string | null }> {
-    NOT_YET('listRecordsForPatient');
+    return NOT_YET('listRecordsForPatient');
   }
   setRecordStatus(_: Identity, __: RecordStatus, ___: Identity): Promise<MedicalRecord> {
-    NOT_YET('setRecordStatus');
+    return NOT_YET('setRecordStatus');
   }
 
   // --- Access grants ---
   createGrant(_: CreateGrantInput): Promise<AccessGrant> {
-    NOT_YET('createGrant');
+    return NOT_YET('createGrant');
   }
   getGrant(_: Identity): Promise<AccessGrant | null> {
-    NOT_YET('getGrant');
+    return NOT_YET('getGrant');
   }
   findActiveGrant(_: Identity, __: Identity, ___?: Identity): Promise<AccessGrant | null> {
-    NOT_YET('findActiveGrant');
+    return NOT_YET('findActiveGrant');
   }
   recordGrantAccess(_: Identity): Promise<AccessGrant> {
-    NOT_YET('recordGrantAccess');
+    return NOT_YET('recordGrantAccess');
   }
   revokeGrant(_: Identity, __: Identity): Promise<AccessGrant> {
-    NOT_YET('revokeGrant');
+    return NOT_YET('revokeGrant');
   }
   expireGrants(_: number): Promise<number> {
-    NOT_YET('expireGrants');
+    return NOT_YET('expireGrants');
   }
 
   // --- Consent ---
   recordConsent(_: CreateConsentInput): Promise<ConsentRecord> {
-    NOT_YET('recordConsent');
+    return NOT_YET('recordConsent');
   }
   getConsent(_: Identity): Promise<ConsentRecord | null> {
-    NOT_YET('getConsent');
+    return NOT_YET('getConsent');
   }
   listConsentsForPatient(_: Identity): Promise<ConsentRecord[]> {
-    NOT_YET('listConsentsForPatient');
+    return NOT_YET('listConsentsForPatient');
   }
   revokeConsent(_: Identity, __: Identity, ___: number): Promise<ConsentRecord> {
-    NOT_YET('revokeConsent');
+    return NOT_YET('revokeConsent');
   }
 
   // --- Audit ---
   appendAudit(_: CreateAuditInput): Promise<AuditEntry> {
-    NOT_YET('appendAudit');
+    return NOT_YET('appendAudit');
   }
   getAuditEntry(_: number): Promise<AuditEntry | null> {
-    NOT_YET('getAuditEntry');
+    return NOT_YET('getAuditEntry');
   }
   verifyAuditChain(
     _: number,
     __: number,
   ): Promise<{ entries: AuditEntry[]; rootHash: Hash; valid: boolean }> {
-    NOT_YET('verifyAuditChain');
+    return NOT_YET('verifyAuditChain');
   }
   listAuditForPatient(
     _: Identity,
     __?: { since?: number; limit?: number },
   ): Promise<AuditEntry[]> {
-    NOT_YET('listAuditForPatient');
+    return NOT_YET('listAuditForPatient');
   }
 }

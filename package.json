@@ -14,11 +14,11 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "test": "npx vitest run --passWithNoTests",
+    "test": "npm test --workspaces --if-present",
     "dev": "npm run dev --workspace=packages/api-server",
     "seed": "npx tsx scripts/seed/index.ts",
     "deploy": "bash scripts/deploy/deploy.sh",
-    "lint": "npx tsc --noEmit --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
     "clean": "npx rimraf packages/*/dist",
     "build:programs": "cd packages/vault-programs && anchor build",
     "test:programs": "cd packages/vault-programs && anchor test",
