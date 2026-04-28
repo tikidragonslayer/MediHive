@@ -39,6 +39,7 @@ export function createVaultDriver(profile: Profile = readProfile()): VaultDriver
     case 'onchain':
       return new SolanaVaultDriver({
         cluster: process.env.SOLANA_CLUSTER ?? 'devnet',
+        ...(process.env.SOLANA_RPC_URL && { rpcUrl: process.env.SOLANA_RPC_URL }),
       });
   }
 }
