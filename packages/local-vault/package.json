@@ -14,7 +14,7 @@
     "migrate:built": "node dist/migrate.js"
   },
   "dependencies": {
-    "@medi-hive/vault-driver": "0.1.0",
+    "@medi-hive/vault-driver": "file:../vault-driver",
     "pg": "^8.11.0"
   },
   "devDependencies": {

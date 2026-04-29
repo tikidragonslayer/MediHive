@@ -1,9 +1,10 @@
 # MediHive
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Version](https://img.shields.io/badge/version-0.2.0-informational)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-informational)](CHANGELOG.md)
 [![Profile: local](https://img.shields.io/badge/profile-local-success)](docs/profiles.md)
-[![Profile: onchain](https://img.shields.io/badge/profile-onchain-blueviolet)](docs/profiles.md)
+[![Profile: onchain](https://img.shields.io/badge/profile-onchain--readonly-orange)](docs/profiles.md)
+[![Tests](https://img.shields.io/badge/tests-79%20passing-brightgreen)](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml)
 [![CI](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml/badge.svg)](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml)
 
 **Self-hostable hospital records where the patient holds the keys.**
@@ -32,22 +33,53 @@ MediHive addresses all four with a six-layer architecture that **bolts onto exis
 
 ## Choose your profile
 
-MediHive runs in one of two profiles. Same application code, same FHIR
-adapter, same AI scribe — only the underlying vault differs.
+MediHive runs in one of two profiles, selected by `MEDIHIVE_PROFILE`.
 
 | | `local` | `onchain` |
 |---|---|---|
-| Backend | PostgreSQL | Solana + IPFS/Arweave |
+| **Status** | **Read + write, fully tested** | **Read-only, transaction layer in progress** |
+| Backend | PostgreSQL 16 | Solana (devnet) + IPFS/Arweave |
 | Wallet required | No | Yes |
-| Cross-hospital portability | Manual FHIR export | Native |
-| Patient-side revocation | Via portal | Via wallet |
-| Tamper-evident audit | Hash-chained + WORM checkpoint | On-chain |
-| Best for | Most hospitals starting today | Sovereign-records pilots |
-| Quick start | `docker compose -f infra/docker-compose.local.yml up` | See `docs/profiles.md` |
+| Cross-hospital portability | Manual FHIR export | Native (when writes land) |
+| Patient-side revocation | Via portal | Via wallet (when writes land) |
+| Tamper-evident audit | Hash-chained `audit_log` + WORM checkpoint | On-chain consensus |
+| Tested | ✅ 79 passing tests (unit + integration + HTTP) | ⚠️ Read paths only |
+| Quick start | See "Quick start" below | See [`docs/profiles.md`](docs/profiles.md) |
 
-Set `MEDIHIVE_PROFILE=local` or `MEDIHIVE_PROFILE=onchain` at process start.
-Both profiles are first-class. See [`docs/profiles.md`](docs/profiles.md)
-for a full comparison and the HIPAA technical safeguards story.
+**The local profile is the first-class deployment path today.** The on-chain profile is structured (interface, driver, decoders) and read paths work, but write paths throw `NOT_YET_WRITES` until `@medi-hive/vault-sdk` ships transaction builders. Tracking issue in the repo.
+
+See [`docs/profiles.md`](docs/profiles.md) for the full comparison and the HIPAA technical safeguards mapping.
+
+## Quick start (local profile)
+
+```bash
+# 1. Start Postgres
+brew install postgresql@16
+brew services start postgresql@16
+createdb medihive
+psql -d postgres -c "CREATE USER medihive WITH PASSWORD 'medihive_dev'; ALTER USER medihive CREATEDB;"
+
+# 2. Install + build all workspaces
+git clone https://github.com/tikidragonslayer/MediHive.git
+cd MediHive
+npm install   # `prepare` scripts auto-build dependent packages
+
+# 3. Apply schema
+DATABASE_URL=postgres://medihive:medihive_dev@127.0.0.1:5432/medihive \
+  npm run migrate --workspace=@medi-hive/local-vault
+
+# 4. Run all tests (79 passing)
+DATABASE_URL=postgres://medihive:medihive_dev@127.0.0.1:5432/medihive \
+  npm test
+
+# 5. Boot the api-server
+DATABASE_URL=postgres://medihive:medihive_dev@127.0.0.1:5432/medihive \
+MEDIHIVE_PROFILE=local \
+  npm start --workspace=@medi-hive/api-server
+
+curl http://localhost:4000/health
+# {"status":"ok","profile":"local","vault":{"kind":"local","backend":"postgres","version":"0.1.0"}, ...}
+```
 
 ## Architecture
 

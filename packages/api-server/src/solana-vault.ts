@@ -433,21 +433,36 @@ export class SolanaVaultDriver implements VaultDriver {
   }
 
   async getAuditEntry(_: number): Promise<AuditEntry | null> {
-    // On-chain audit entries are addressed by PDA, not by sequence
-    // number. Until the SDK exposes a way to look up an entry by its
-    // account address, this remains unimplemented.
-    return null;
+    // SECURITY: On-chain audit entries are addressed by PDA, not by
+    // sequence number. Returning `null` here would tell a caller "this
+    // entry does not exist" without us actually checking — a false
+    // negative in security-relevant code. We throw instead so callers
+    // surface the limitation rather than acting on a wrong answer.
+    throw new Error(
+      `[SolanaVaultDriver] getAuditEntry(seq) is not supported on the on-chain ` +
+        `profile because audit entries are PDA-addressed, not sequence-numbered. ` +
+        `Use listAuditForPatient(patient) to enumerate, or query the SDK directly. ` +
+        `Tracking: https://github.com/tikidragonslayer/MediHive/issues`,
+    );
   }
 
   async verifyAuditChain(
     _: number,
     __: number,
   ): Promise<{ entries: AuditEntry[]; rootHash: Hash; valid: boolean }> {
-    // The on-chain profile gets integrity from Solana's consensus, not
-    // from a hash chain over canonical JSON. A future implementation
-    // should walk the on-chain log accounts and produce a deterministic
-    // root for parity with the LocalVault interface.
-    return { entries: [], rootHash: '', valid: true };
+    // SECURITY: The on-chain profile gets integrity from Solana's
+    // consensus, not from a hash chain over canonical JSON. Returning
+    // `{valid: true}` without performing any verification would allow a
+    // caller to mistake "we didn't check" for "the chain is valid" —
+    // a false positive in security-relevant code. We throw so callers
+    // explicitly handle the difference between profiles.
+    throw new Error(
+      `[SolanaVaultDriver] verifyAuditChain is not supported on the on-chain ` +
+        `profile. Integrity on Solana comes from consensus, not from a hash ` +
+        `chain over canonical JSON. Verifiers should compare on-chain account ` +
+        `signatures against expected program-derived addresses. ` +
+        `Tracking: https://github.com/tikidragonslayer/MediHive/issues`,
+    );
   }
 
   async listAuditForPatient(

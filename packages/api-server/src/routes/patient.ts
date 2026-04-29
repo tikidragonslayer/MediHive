@@ -2,8 +2,99 @@ import { Hono } from 'hono';
 import { AppEnv } from '../types';
 import { collections } from '../db';
 import { requirePermission } from '../middleware/auth';
+import { RecordType } from '@medi-hive/vault-driver';
 
 export const patientRoutes = new Hono<AppEnv>();
+
+// ─────────────────────────────────────────────────────────────────────
+// VaultDriver-backed endpoints (v2)
+//
+// These endpoints go through the active VaultDriver (LocalVaultDriver
+// for MEDIHIVE_PROFILE=local, SolanaVaultDriver for =onchain) instead
+// of Firestore. They exist alongside the legacy v1 endpoints below
+// while route-by-route migration proceeds.
+//
+// On-chain caveat: the on-chain SDK addresses passports by Solana
+// wallet, not by an internal hospital ID. For local profile, the
+// auth.pubkey is also used directly as the passport authority so the
+// same auth flow works for both profiles.
+// ─────────────────────────────────────────────────────────────────────
+
+// GET /api/patient/v2/passport — VaultDriver-backed passport read
+patientRoutes.get('/v2/passport', async (c) => {
+  const auth = c.get('auth') as { pubkey: string };
+  const vault = c.get('vault');
+
+  // The vault driver's getPassport expects an Identity (passport id).
+  // For the on-chain profile that's the wallet pubkey; for local it's
+  // a UUID stored against the wallet as `authority`. We try both:
+  // direct passport-id lookup first, then a wallet-keyed scan.
+  // For now we try the direct lookup (works on-chain). Local-profile
+  // patients should use /onboard to bootstrap a passport, then store
+  // the returned UUID client-side.
+  const passport = await vault.getPassport(auth.pubkey).catch(() => null);
+  if (!passport) {
+    return c.json(
+      {
+        error: 'Passport not found',
+        hint:
+          'On the local profile, look up by your passport UUID returned from /v2/onboard, ' +
+          'not by your wallet pubkey.',
+      },
+      404,
+    );
+  }
+  return c.json({ passport });
+});
+
+// GET /api/patient/v2/records/:passportId — VaultDriver-backed record list
+patientRoutes.get('/v2/records/:passportId', async (c) => {
+  const auth = c.get('auth') as { pubkey: string };
+  const vault = c.get('vault');
+  const passportId = c.req.param('passportId');
+
+  // Authorization: a patient may only read their own passport's records.
+  const passport = await vault.getPassport(passportId);
+  if (!passport) return c.json({ error: 'Passport not found' }, 404);
+  if (passport.authority !== auth.pubkey) {
+    return c.json({ error: 'Forbidden: not your passport' }, 403);
+  }
+
+  const url = new URL(c.req.url);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 500);
+  const cursor = url.searchParams.get('cursor') ?? undefined;
+  const typesParam = url.searchParams.get('types');
+  const types = typesParam
+    ? (typesParam.split(',').filter((t) =>
+        Object.values(RecordType).includes(t as RecordType),
+      ) as RecordType[])
+    : undefined;
+
+  const result = await vault.listRecordsForPatient(passportId, { limit, cursor, types });
+  return c.json(result);
+});
+
+// GET /api/patient/v2/audit/:passportId — VaultDriver-backed audit trail
+patientRoutes.get('/v2/audit/:passportId', async (c) => {
+  const auth = c.get('auth') as { pubkey: string };
+  const vault = c.get('vault');
+  const passportId = c.req.param('passportId');
+
+  const passport = await vault.getPassport(passportId);
+  if (!passport) return c.json({ error: 'Passport not found' }, 404);
+  if (passport.authority !== auth.pubkey) {
+    return c.json({ error: 'Forbidden: not your passport' }, 403);
+  }
+
+  const url = new URL(c.req.url);
+  const since = url.searchParams.get('since')
+    ? parseInt(url.searchParams.get('since')!, 10)
+    : undefined;
+  const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '200', 10), 1000);
+
+  const entries = await vault.listAuditForPatient(passportId, { since, limit });
+  return c.json({ entries });
+});
 
 // GET /api/patient/passport — View own passport
 patientRoutes.get('/passport', async (c) => {

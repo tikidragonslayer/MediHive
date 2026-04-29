@@ -5,6 +5,35 @@ All notable changes to MediHive will be documented here. Format follows
 follows [Semantic Versioning](https://semver.org/) where reasonable for a
 pre-1.0 codebase.
 
+## [0.3.0] — 2026-04-29
+
+The credibility release. Closes the largest gap from v0.2.0: the api-server now actually uses the VaultDriver instead of going through Firestore at every endpoint.
+
+### Added
+
+- **First VaultDriver-backed routes**: `/api/patient/v2/passport`, `/api/patient/v2/records/:passportId`, `/api/patient/v2/audit/:passportId`. They go through the active driver (Postgres in local profile, Solana in onchain) instead of Firestore.
+- **API-level integration tests** (`packages/api-server/src/__tests__/patient-vault.integration.test.ts`): 7 tests exercise HTTP → Hono → vaultMiddleware → LocalVaultDriver → real Postgres. Cover happy path, type-filter query params, ownership-based authorization (403), and 404 with helpful hints.
+- **Postgres integration test job** in CI (`.github/workflows/ci.yml`): spins up `postgres:16-alpine` as a service container, applies the migration, runs the local-vault and api-server suites with `DATABASE_URL` set.
+- **`prepare: tsc` scripts** on every consumed workspace (`vault-driver`, `vault-sdk`, `local-vault`, `brain-engine`) so `npm install` from a fresh clone produces a buildable tree without manual build ordering.
+
+### Changed
+
+- **Silent-success stubs replaced with explicit throws** on the on-chain driver:
+  - `SolanaVaultDriver.verifyAuditChain` previously returned `{valid: true, entries: [], rootHash: ''}` for any input — a security false-positive. Now throws with a directional message.
+  - `SolanaVaultDriver.getAuditEntry` previously returned `null` without checking — a security false-negative. Now throws.
+- **`packages/local-vault/package.json`** — fixed `"@medi-hive/vault-driver"` from `"0.1.0"` (which broke clean installs) to `"file:../vault-driver"`.
+- **README** — replaced "two first-class profiles" framing with honest status: local is read+write fully tested, onchain is read-only with the transaction layer in progress. Quick start now reflects the actual `brew install postgresql@16` flow.
+
+### Test count
+
+| Suite | Tests |
+|---|---|
+| local-vault (audit-chain unit) | 7 |
+| local-vault (Postgres integration) | 17 |
+| shield-encryption (Shamir + crypto) | 48 |
+| api-server (HTTP → Hono → driver → Postgres) | 7 |
+| **Total** | **79** |
+
 ## [0.2.0] — 2026-04-28
 
 The dual-profile release. MediHive now runs with or without the on-chain

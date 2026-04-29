@@ -23,8 +23,8 @@ jobs:
       - name: Typecheck all workspaces
         run: npm run lint --if-present
 
-  test:
-    name: Test
+  unit-tests:
+    name: Unit tests (no Postgres)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,8 +33,40 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci --no-audit --no-fund
-      - name: Run vitest
+      - name: Run vitest (DATABASE_URL unset → integration tests skip)
         run: npm test --if-present
+
+  integration-tests:
+    name: Integration tests (Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: medihive
+          POSTGRES_PASSWORD: medihive_ci
+          POSTGRES_DB: medihive
+        ports:
+          - 5432:5432
+        # Wait for Postgres to be ready before the job starts.
+        options: >-
+          --health-cmd "pg_isready -U medihive -d medihive"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://medihive:medihive_ci@127.0.0.1:5432/medihive
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - name: Apply migrations
+        run: npm run migrate --workspace=@medi-hive/local-vault
+      - name: Run vitest with DATABASE_URL set
+        run: npm test --workspace=@medi-hive/local-vault
 
   license-check:
     name: License header sanity
