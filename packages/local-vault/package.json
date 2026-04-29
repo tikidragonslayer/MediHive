@@ -11,10 +11,11 @@
     "lint": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "migrate": "tsx src/migrate.ts",
-    "migrate:built": "node dist/migrate.js"
+    "migrate:built": "node dist/migrate.js",
+    "prepare": "tsc"
   },
   "dependencies": {
-    "@medi-hive/vault-driver": "0.1.0",
+    "@medi-hive/vault-driver": "file:../vault-driver",
     "pg": "^8.11.0"
   },
   "devDependencies": {
