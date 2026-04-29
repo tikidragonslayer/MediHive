@@ -11,8 +11,7 @@
     "lint": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "migrate": "tsx src/migrate.ts",
-    "migrate:built": "node dist/migrate.js",
-    "prepare": "tsc"
+    "migrate:built": "node dist/migrate.js"
   },
   "dependencies": {
     "@medi-hive/vault-driver": "file:../vault-driver",

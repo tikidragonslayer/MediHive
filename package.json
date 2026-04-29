@@ -24,7 +24,9 @@
     "test:programs": "cd packages/vault-programs && anchor test",
     "build:sdk": "cd packages/vault-sdk && npm run build",
     "build:dashboard": "cd packages/pulse-dashboard && npm run build",
-    "dev:dashboard": "cd packages/pulse-dashboard && npm run dev"
+    "dev:dashboard": "cd packages/pulse-dashboard && npm run dev",
+    "_comment_postinstall": "Workspaces with file: links resolve at install time, but per-workspace prepare scripts run in parallel — so a consumer can typecheck before its dependency's dist/ is populated. Building producers in topological order from the root postinstall fixes this for both fresh clones and CI.",
+    "postinstall": "npm run build --workspace=@medi-hive/vault-driver --workspace=@medi-hive/vault-sdk --workspace=@medi-hive/bridge-core --workspace=@medi-hive/brain-engine --workspace=@medi-hive/local-vault --if-present"
   },
   "engines": {
     "node": ">=20"

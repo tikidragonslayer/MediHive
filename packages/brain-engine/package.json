@@ -7,8 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "lint": "tsc --noEmit",
-    "prepare": "tsc"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@medi-hive/bridge-core": "file:../bridge-core"
