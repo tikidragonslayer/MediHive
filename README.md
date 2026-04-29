@@ -3,8 +3,9 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Version](https://img.shields.io/badge/version-0.3.0-informational)](CHANGELOG.md)
 [![Profile: local](https://img.shields.io/badge/profile-local-success)](docs/profiles.md)
+[![Profile: federated](https://img.shields.io/badge/profile-federated-blueviolet)](docs/profiles.md)
 [![Profile: onchain](https://img.shields.io/badge/profile-onchain--readonly-orange)](docs/profiles.md)
-[![Tests](https://img.shields.io/badge/tests-79%20passing-brightgreen)](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-100%20passing-brightgreen)](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml)
 [![CI](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml/badge.svg)](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml)
 
 **Self-hostable hospital records where the patient holds the keys.**
@@ -33,18 +34,31 @@ MediHive addresses all four with a six-layer architecture that **bolts onto exis
 
 ## Choose your profile
 
-MediHive runs in one of two profiles, selected by `MEDIHIVE_PROFILE`.
+MediHive runs in one of three profiles, selected by `MEDIHIVE_PROFILE`.
 
-| | `local` | `onchain` |
-|---|---|---|
-| **Status** | **Read + write, fully tested** | **Read-only, transaction layer in progress** |
-| Backend | PostgreSQL 16 | Solana (devnet) + IPFS/Arweave |
-| Wallet required | No | Yes |
-| Cross-hospital portability | Manual FHIR export | Native (when writes land) |
-| Patient-side revocation | Via portal | Via wallet (when writes land) |
-| Tamper-evident audit | Hash-chained `audit_log` + WORM checkpoint | On-chain consensus |
-| Tested | ✅ 79 passing tests (unit + integration + HTTP) | ⚠️ Read paths only |
-| Quick start | See "Quick start" below | See [`docs/profiles.md`](docs/profiles.md) |
+| | `local` | `federated` | `onchain` |
+|---|---|---|---|
+| **Status** | **Read + write, fully tested** | **Read merge live, fully tested** | **Read-only, tx layer pending** |
+| Backend | PostgreSQL 16 | PostgreSQL 16 + Solana (read-only) | Solana (devnet) + IPFS/Arweave |
+| Wallet required | No | No (hospital); Yes (patient) | Yes |
+| Cross-hospital portability | Manual FHIR export | Native via patient bridge | Native (when writes land) |
+| Patient-side revocation | Via portal | Via wallet → bridge | Via wallet (when writes land) |
+| Tamper-evident audit | Hash-chained + WORM | Hash-chained + on-chain | On-chain consensus |
+| Quick start | See "Quick start" below | See [`docs/profiles.md`](docs/profiles.md) | See [`docs/profiles.md`](docs/profiles.md) |
+
+### What "federated" means
+
+A hospital running on Postgres can additionally serve **read-only** patient-sovereign records from Solana when the patient has signed a bridge between their on-chain wallet and the hospital's local passport. Hospitals never write on-chain; the patient owns their wallet's private key, and only the patient can write. This makes patient sovereignty real for hospitals that can't run on-chain code themselves.
+
+How a bridge gets created:
+
+1. Patient generates an on-chain passport on Solana (mobile wallet).
+2. Patient walks into a hospital running federated profile. Hospital creates a local passport (the hospital's own row in Postgres).
+3. Patient's mobile wallet signs `canonical(localPassportId, onchainPassportId, nonce, timestamp)` with Ed25519.
+4. Front-desk terminal POSTs the signed payload to `/api/patient/v2/bridge`.
+5. The bridge store verifies the signature against the on-chain pubkey and inserts a non-revoked row. Forever after, when this hospital's clinicians read the patient's records, the federated driver merges local Postgres rows with the patient's on-chain side, filtered by the record types the patient explicitly authorized.
+
+See [`docs/profiles.md`](docs/profiles.md) for the full federation flow and [`packages/local-vault/src/migrations/002_bridges.sql`](packages/local-vault/src/migrations/002_bridges.sql) for the schema and trust-model commentary.
 
 **The local profile is the first-class deployment path today.** The on-chain profile is structured (interface, driver, decoders) and read paths work, but write paths throw `NOT_YET_WRITES` until `@medi-hive/vault-sdk` ships transaction builders. Tracking issue in the repo.
 
