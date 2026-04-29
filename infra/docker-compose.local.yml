@@ -39,6 +39,7 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile
+    image: medihive/api:local
     container_name: medihive-api
     restart: unless-stopped
     depends_on:
@@ -52,11 +53,20 @@ services:
     ports:
       - "127.0.0.1:4000:4000"
 
-  # The pulse-dashboard (Next.js) is intentionally not in this compose
-  # file yet. It needs its own Dockerfile (Next.js standalone output +
-  # different runtime entrypoint), which is tracked as a follow-up.
-  # For now, run it locally during development:
-  #   npm run dev:dashboard
+  dashboard:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.dashboard
+    image: medihive/dashboard:local
+    container_name: medihive-dashboard
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "127.0.0.1:3000:3000"
 
 volumes:
   postgres-data:

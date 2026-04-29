@@ -5,6 +5,20 @@ All notable changes to MediHive will be documented here. Format follows
 follows [Semantic Versioning](https://semver.org/) where reasonable for a
 pre-1.0 codebase.
 
+## [0.4.2] — 2026-04-29
+
+### Added
+
+- **Pulse dashboard now builds + dockerizes**:
+  - `packages/pulse-dashboard/next.config.ts` sets `output: 'standalone'` and `outputFileTracingRoot` so Next emits a self-contained server bundle.
+  - `infra/Dockerfile.dashboard` two-stage build, Node 20-alpine, runs `node packages/pulse-dashboard/server.js` from the standalone output. ~150 MB image.
+  - `infra/docker-compose.local.yml` dashboard service now wired up. `docker compose -f infra/docker-compose.local.yml up` brings up Postgres + api + dashboard end to end.
+- Dashboard verified to start cleanly on port 3000 in standalone mode (returns 200 on `/`).
+
+### Changed
+
+- `.gitignore` now excludes `.next/` so build artifacts don't leak into commits.
+
 ## [0.4.1] — 2026-04-29
 
 Security + second route migration. Closes the headline dependabot alerts and migrates the doctor route group onto the VaultDriver so two roles now use the v2 path (patient + doctor).

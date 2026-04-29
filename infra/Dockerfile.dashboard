@@ -1,0 +1,53 @@
+# MediHive — Copyright (C) 2024-2026 The MediHive Authors
+# Licensed under the GNU Affero General Public License v3.0 or later.
+#
+# Two-stage Docker build for the pulse-dashboard (Next.js).
+#
+# Uses Next's standalone output mode (configured in next.config.ts) so
+# the runtime image is small and self-contained. ~150 MB final image.
+
+# =====================================================
+# Stage 1: build the standalone bundle
+# =====================================================
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Bring in everything the dashboard build needs.
+COPY package.json package-lock.json ./
+COPY packages/pulse-dashboard/package.json packages/pulse-dashboard/
+
+# The dashboard has no internal workspace deps, so this install is
+# self-contained.
+RUN npm ci --workspace=packages/pulse-dashboard --no-audit --no-fund
+
+COPY packages/pulse-dashboard/ packages/pulse-dashboard/
+
+# Next bakes NEXT_PUBLIC_* env vars into the build, so anything that's
+# meant to be configurable at runtime must be referenced via something
+# else (e.g. /api/config endpoint). For now the dashboard talks only to
+# /api on the same host, so no public env vars are required at build.
+RUN npm run build --workspace=packages/pulse-dashboard
+
+# =====================================================
+# Stage 2: minimal runtime
+# =====================================================
+FROM node:20-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+# Standalone output ships only the files the server needs.
+COPY --from=builder /app/packages/pulse-dashboard/.next/standalone ./
+COPY --from=builder /app/packages/pulse-dashboard/.next/static ./packages/pulse-dashboard/.next/static
+COPY --from=builder /app/packages/pulse-dashboard/public ./packages/pulse-dashboard/public
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1
+
+CMD ["node", "packages/pulse-dashboard/server.js"]
