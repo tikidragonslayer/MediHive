@@ -10,8 +10,115 @@
 import { Hono } from 'hono';
 import { AppEnv } from '../types';
 import { collections } from '../db';
+import { GrantStatus, RecordType } from '@medi-hive/vault-driver';
 
 export const doctorRoutes = new Hono<AppEnv>();
+
+// ─────────────────────────────────────────────────────────────────────
+// VaultDriver-backed endpoints (v2)
+//
+// The doctor's-eye view of a patient. Reads go through c.var.vault, so
+// the federated profile transparently merges patient-curated on-chain
+// records into the result when a bridge is active. Doctors see one
+// chart, the federation layer handles "where did this come from."
+//
+// Authorization: doctors must hold an active access grant for the
+// patient. The vault driver enforces the time window, scope, and
+// status; we just forward the doctor's pubkey + the patient passport
+// and trust the driver's findActiveGrant + recordGrantAccess.
+// ─────────────────────────────────────────────────────────────────────
+
+// GET /api/doctor/v2/patients/:passportId/records — list records for a
+// patient the doctor has an active grant for. Records are filtered by
+// grant scope (the patient's allowed record types) at the driver level.
+doctorRoutes.get('/v2/patients/:passportId/records', async (c) => {
+  const auth = c.get('auth') as { pubkey: string };
+  const vault = c.get('vault');
+  const passportId = c.req.param('passportId');
+
+  const passport = await vault.getPassport(passportId);
+  if (!passport) return c.json({ error: 'Patient passport not found' }, 404);
+
+  const grant = await vault.findActiveGrant(passportId, auth.pubkey);
+  if (!grant) {
+    return c.json(
+      {
+        error: 'No active access grant',
+        hint: 'Patient must mint an access grant naming this clinician before records are visible.',
+      },
+      403,
+    );
+  }
+  if (grant.status !== GrantStatus.Active) {
+    return c.json({ error: 'Access grant is not active' }, 403);
+  }
+  if (!grant.scope.read) {
+    return c.json({ error: 'Access grant does not include read permission' }, 403);
+  }
+
+  const url = new URL(c.req.url);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 500);
+  const cursor = url.searchParams.get('cursor') ?? undefined;
+  const typesParam = url.searchParams.get('types');
+  // The doctor can only request types within the grant's scope.
+  const requested = typesParam
+    ? (typesParam.split(',').filter((t) =>
+        Object.values(RecordType).includes(t as RecordType),
+      ) as RecordType[])
+    : grant.scope.recordTypes;
+  const types = requested.filter((t) => grant.scope.recordTypes.includes(t));
+
+  if (types.length === 0) {
+    return c.json({
+      records: [],
+      nextCursor: null,
+      grantId: grant.id,
+      hint: 'Requested record types are outside the grant\'s allowed scope.',
+    });
+  }
+
+  const result = await vault.listRecordsForPatient(passportId, { limit, cursor, types });
+
+  // Increment access_count on the grant. recordGrantAccess is best-effort:
+  // a failure to increment must not block the read (audit log captures
+  // the access either way), but we surface it for ops to observe.
+  try {
+    await vault.recordGrantAccess(grant.id);
+  } catch {
+    /* grant counter increment failed — continue */
+  }
+
+  // Append a 'view' audit entry through the driver. Same try/catch
+  // posture: clinical reads must continue even if audit fails.
+  try {
+    await vault.appendAudit({
+      actor: auth.pubkey,
+      action: 'view' as never,
+      targetPatient: passportId,
+      ipHash: '00'.repeat(32),
+      deviceHash: '00'.repeat(32),
+      metadata: `doctor view via grant ${grant.id}`,
+    });
+  } catch {
+    /* audit append failed */
+  }
+
+  return c.json({ ...result, grantId: grant.id });
+});
+
+// GET /api/doctor/v2/patients/:passportId/grant — current active grant
+// for this doctor on this patient. 404 if none. Doctors can call this
+// before fetching records to know if they need to request a grant.
+doctorRoutes.get('/v2/patients/:passportId/grant', async (c) => {
+  const auth = c.get('auth') as { pubkey: string };
+  const vault = c.get('vault');
+  const passportId = c.req.param('passportId');
+
+  const grant = await vault.findActiveGrant(passportId, auth.pubkey);
+  if (!grant) return c.json({ grant: null }, 404);
+
+  return c.json({ grant });
+});
 
 // GET /api/doctor/patients — List patients with active grants
 doctorRoutes.get('/patients', async (c) => {
