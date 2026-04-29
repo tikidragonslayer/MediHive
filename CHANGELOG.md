@@ -5,6 +5,56 @@ All notable changes to MediHive will be documented here. Format follows
 follows [Semantic Versioning](https://semver.org/) where reasonable for a
 pre-1.0 codebase.
 
+## [0.4.1] — 2026-04-29
+
+Security + second route migration. Closes the headline dependabot alerts and migrates the doctor route group onto the VaultDriver so two roles now use the v2 path (patient + doctor).
+
+### Security
+
+| Direct dep | Was | Now | Closed alerts |
+|---|---|---|---|
+| `next` (pulse-dashboard) | 16.2.1 | ^16.2.3 (resolves 16.2.4) | #9, #14 (HIGH) |
+| `hono` (api-server) | ^4.4.0 | ^4.12.14 (resolves 4.12.15) | #4–#8, #10 (MEDIUM) |
+| `@hono/node-server` | ^1.11.0 | ^1.19.13 (resolves 1.19.14) | #3 (MEDIUM) |
+| `vitest` (local-vault, api-server) | ^1.4.0/1.6.1 | ^3.2.4 | indirect: #18, #19 |
+
+Root `package.json` overrides added for `uuid: ^11.0.0`, `@tootallnate/once: ^3.0.0`, `fast-xml-parser: ^5.7.0` to override transitive vulnerable versions.
+
+Remaining open transitive alerts (`uuid@8.3.2` in jayson, `uuid@9.0.1` in google-gax) are not exploitable in our usage — the GHSA covers `v3/v5/v6` UUID generation paths only, and the upstream usage is `v4`. Documented in this CHANGELOG so reviewers know.
+
+### Doctor route migration (second route group on the v2 path)
+
+New endpoints under `/api/doctor/v2/*`:
+
+| Endpoint | What it does |
+|---|---|
+| `GET /v2/patients/:passportId/records` | Lists records for a patient. Enforces an active access grant via `vault.findActiveGrant(passportId, auth.pubkey)`. Filters returned record types to the intersection of the request and the grant's scope. Increments grant access_count and appends a 'view' audit entry. |
+| `GET /v2/patients/:passportId/grant` | Returns the active grant for this doctor on this patient (or 404). |
+
+Authorization decisions now live in the driver: scope, time window, status, max-accesses. The route handler just forwards the doctor's pubkey + the patient passport.
+
+### Tests
+
+| Suite | Was | Now |
+|---|---|---|
+| local-vault audit-chain | 7 | 7 |
+| local-vault driver | 17 | 17 |
+| local-vault federation | 15 | 15 |
+| shield-encryption | 48 | 48 |
+| api-server patient routes (HTTP) | 7 | 7 |
+| api-server bridge endpoint (HTTP) | 6 | 6 |
+| **api-server doctor routes (HTTP)** | — | **7** ← new |
+| **Total** | 100 | **107** |
+
+New doctor-route coverage:
+- 403 with hint when doctor has no active grant
+- 404 when patient passport doesn't exist
+- 200 with scope-filtered records when grant is active
+- View audit entry appended after successful read
+- ?types= query param narrows to grant-scope intersection
+- Out-of-scope type returns empty list with a hint (not 403 — the grant exists, the type is just outside it)
+- /grant endpoint returns active grant or 404
+
 ## [0.4.0] — 2026-04-29
 
 The federation release. A hospital running the local profile can now serve **read-only** patient-sovereign records from Solana when the patient has signed a bridge between their on-chain wallet and the hospital's local passport. Hospitals never write on-chain.

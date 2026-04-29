@@ -16,17 +16,17 @@
     "@medi-hive/local-vault": "file:../local-vault",
     "@medi-hive/vault-driver": "file:../vault-driver",
     "@medi-hive/vault-sdk": "file:../vault-sdk",
-    "@hono/node-server": "^1.11.0",
+    "@hono/node-server": "^1.19.13",
     "@solana/web3.js": "^1.95.0",
     "dotenv": "^16.4.0",
     "firebase-admin": "^13.7.0",
     "firebase-functions": "^6.3.0",
-    "hono": "^4.4.0"
+    "hono": "^4.12.14"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tsx": "^4.16.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.6.1"
+    "vitest": "^3.2.4"
   }
 }
