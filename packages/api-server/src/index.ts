@@ -14,11 +14,13 @@ import { billingRoutes } from './routes/billing';
 import { smartFhirRoutes } from './routes/smart-fhir';
 import { authMiddleware } from './middleware/auth';
 import { vaultMiddleware } from './middleware/vault';
-import { createVaultDriver, readProfile } from './vault';
+import { createVaultContext, readProfile } from './vault';
 
-// Profile-driven vault driver. Built once at startup, shared across requests.
+// Profile-driven vault driver + bridge store. Built once at startup,
+// shared across requests.
 const profile = readProfile();
-const vault = createVaultDriver(profile);
+const vaultCtx = createVaultContext(profile);
+const vault = vaultCtx.driver;
 const vaultInfo = vault.info();
 
 const app = new Hono<AppEnv>();
@@ -26,7 +28,13 @@ const app = new Hono<AppEnv>();
 // Global middleware
 app.use('*', cors({ origin: ['http://localhost:3000', 'http://localhost:3001'], credentials: true }));
 app.use('*', logger());
-app.use('*', vaultMiddleware(vault));
+app.use(
+  '*',
+  vaultMiddleware({
+    driver: vault,
+    ...(vaultCtx.bridgeStore && { bridgeStore: vaultCtx.bridgeStore }),
+  }),
+);
 
 // Health check (no auth)
 app.get('/health', (c) =>

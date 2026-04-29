@@ -36,8 +36,14 @@ if (!admin.apps.length) {
 
 export const db: Firestore = admin.firestore();
 
-// Firestore settings
-db.settings({ ignoreUndefinedProperties: true });
+// Firestore settings — only callable once per process. The try/catch
+// makes module re-import (e.g. across vitest test files in a single
+// process) idempotent rather than fatal.
+try {
+  db.settings({ ignoreUndefinedProperties: true });
+} catch {
+  /* Firestore.settings already configured in this process. */
+}
 
 // ── Collection references ────────────────────────────────────────────
 

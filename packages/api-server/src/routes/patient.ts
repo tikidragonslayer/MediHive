@@ -96,6 +96,109 @@ patientRoutes.get('/v2/audit/:passportId', async (c) => {
   return c.json({ entries });
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// Bridge link — federated profile only
+//
+// The patient-signed flow:
+//   1. Patient's mobile wallet signs canonical JSON of:
+//        { localPassportId, onchainPassportId, nonce, timestamp }
+//   2. Front-desk terminal POSTs the signed payload to this endpoint.
+//   3. We verify the signature against the on-chain pubkey and, if
+//      valid, insert a non-revoked bridge row.
+//
+// This endpoint is a 404 on profiles that don't run a bridge store
+// (local-only and onchain-only). It explicitly does not bypass the
+// bridge store's verification — the verifier is the same Ed25519
+// implementation used in the integration tests.
+// ─────────────────────────────────────────────────────────────────────
+patientRoutes.post('/v2/bridge', async (c) => {
+  const auth = c.get('auth') as { pubkey: string };
+  const bridgeStore = c.get('bridgeStore');
+
+  if (!bridgeStore) {
+    return c.json(
+      {
+        error: 'Bridge linking is only available on MEDIHIVE_PROFILE=federated',
+        hint: 'Set MEDIHIVE_PROFILE=federated and ensure DATABASE_URL points at the local-side Postgres.',
+      },
+      404,
+    );
+  }
+
+  type BridgeBody = {
+    localPassportId: string;
+    onchainPassportId: string;
+    signatureB64: string;
+    nonce: string;
+    timestamp: number;
+    onchainRecordTypes?: string[];
+  };
+  const body = (await c.req.json().catch(() => null)) as BridgeBody | null;
+  if (
+    !body ||
+    typeof body.localPassportId !== 'string' ||
+    typeof body.onchainPassportId !== 'string' ||
+    typeof body.signatureB64 !== 'string' ||
+    typeof body.nonce !== 'string' ||
+    typeof body.timestamp !== 'number'
+  ) {
+    return c.json(
+      {
+        error:
+          'Body must be { localPassportId, onchainPassportId, signatureB64, nonce, timestamp, onchainRecordTypes? }',
+      },
+      400,
+    );
+  }
+
+  // Authorization: the requester's auth.pubkey must match the on-chain
+  // pubkey they're claiming. This prevents an attacker from binding
+  // someone else's wallet to the local passport.
+  if (auth.pubkey !== body.onchainPassportId) {
+    return c.json(
+      {
+        error: 'Forbidden: auth.pubkey must match onchainPassportId in the bridge request.',
+      },
+      403,
+    );
+  }
+
+  try {
+    const bridge = await bridgeStore.createBridge({
+      localPassportId: body.localPassportId,
+      onchainPassportId: body.onchainPassportId,
+      establishedVia: 'patient_signed',
+      signatureB64: body.signatureB64,
+      signatureNonce: body.nonce,
+      signatureTimestamp: body.timestamp,
+      onchainRecordTypes: body.onchainRecordTypes ?? [],
+    });
+    return c.json({ bridge }, 201);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Bridge creation failed';
+    // Map known error shapes to specific status codes.
+    if (msg.match(/verification failed/i)) return c.json({ error: msg }, 400);
+    if (msg.match(/skew/i)) return c.json({ error: msg }, 400);
+    if (msg.match(/at least one of/i)) return c.json({ error: msg }, 400);
+    return c.json({ error: msg }, 500);
+  }
+});
+
+// DELETE /api/patient/v2/bridge/:bridgeId — patient-initiated revocation
+patientRoutes.delete('/v2/bridge/:bridgeId', async (c) => {
+  const bridgeStore = c.get('bridgeStore');
+  if (!bridgeStore) return c.json({ error: 'Bridge linking unavailable on this profile' }, 404);
+
+  const id = c.req.param('bridgeId');
+  try {
+    const bridge = await bridgeStore.revoke(id);
+    return c.json({ bridge });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Revoke failed';
+    return c.json({ error: msg }, 404);
+  }
+});
+
 // GET /api/patient/passport — View own passport
 patientRoutes.get('/passport', async (c) => {
   const auth = c.get('auth') as { pubkey: string };

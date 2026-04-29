@@ -1,9 +1,15 @@
 # Choosing a profile
 
-MediHive runs in one of two profiles. The application code, FHIR adapter,
-AI scribe, dashboard, and clinical algorithms are identical between them.
-The only difference is the **VaultDriver** that backs patient passports,
-records, grants, consent, and audit.
+MediHive runs in one of three profiles. The application code, FHIR
+adapter, AI scribe, dashboard, and clinical algorithms are identical
+between them. The only difference is the **VaultDriver** that backs
+patient passports, records, grants, consent, and audit.
+
+| Profile | Use this when… |
+|---|---|
+| `local` | You're a hospital running on Postgres with no on-chain ambitions. Simplest, fastest, no wallet. |
+| `federated` | You're a hospital running on Postgres but want to **read** patient-curated records that the patient has stored on Solana. Hospitals never write on-chain; the patient owns the keys. **This is the recommended profile for most hospitals once they have at least one patient with an on-chain passport.** |
+| `onchain` | You're running a sovereign-records pilot or you're a patient-side service. Reads work; writes are on the v0.5 roadmap. |
 
 ## `MEDIHIVE_PROFILE=local` — Postgres-backed, on-prem
 
@@ -32,6 +38,52 @@ This profile satisfies HIPAA technical safeguards (45 CFR §164.312):
 - **Integrity:** SHA-256 chain detects any tampering, including by DB admins, when checkpoints are exported off-host
 - **Person-or-entity authentication:** delegated to the API server's auth layer
 - **Transmission security:** TLS 1.3 end-to-end (operator's responsibility)
+
+## `MEDIHIVE_PROFILE=federated` — Postgres + read-only on-chain
+
+The hybrid profile. The hospital runs Postgres for everything it writes,
+and additionally serves **read-only** patient-curated records from
+Solana when the patient has signed a bridge between their on-chain
+wallet and the hospital's local passport.
+
+| Property | Federated profile |
+|---|---|
+| Backend | PostgreSQL 16+ (writes) + Solana RPC (reads) |
+| Patient identity | Local UUID for hospital records; on-chain wallet for sovereign records; bridged at the front desk |
+| Hospital writes | Local only — never writes to the patient's on-chain side |
+| Cross-hospital portability | Native: patient walks into any federated hospital, signs the bridge, and that hospital sees prior on-chain records |
+| Patient revocation | Patient signs `DELETE /api/patient/v2/bridge/:id` from wallet — hospital immediately stops reading on-chain |
+| Type allowlist | Per-bridge `onchain_record_types` array — patient declares which record categories the hospital may read |
+| Wallet required? | Patient yes, hospital no |
+| RPC failure mode | Local reads continue; on-chain reads silently degrade (logged) |
+
+### How a bridge gets created
+
+1. Patient generates an on-chain passport on Solana via the mobile app.
+2. Patient walks into Hospital X for the first time. Front desk creates a local Postgres passport.
+3. Front-desk terminal shows a QR code containing the local passport UUID.
+4. Patient's mobile wallet signs a canonical JSON envelope:
+   ```json
+   {"localPassportId":"…","nonce":"…","onchainPassportId":"…","timestamp":1700000000}
+   ```
+   Keys sorted lexicographically, no whitespace, RFC 8785 style.
+5. Front-desk terminal POSTs to `/api/patient/v2/bridge` with the signed payload.
+6. Server verifies the Ed25519 signature against the on-chain pubkey, checks the timestamp is within ±5 minutes (configurable), and inserts a non-revoked row in `patient_bridges`.
+7. Forever after, when this hospital's clinicians read the patient's records, the federated driver merges local Postgres rows with the on-chain records the patient has explicitly authorized for this hospital.
+
+### Trust model
+
+- Hospital cannot forge a bridge: the on-chain pubkey must produce a valid signature over the canonical envelope.
+- Patient cannot link someone else's wallet: `auth.pubkey === onchainPassportId` is enforced by the API endpoint, in addition to the signature check.
+- Replay is blocked by the timestamp window plus the unique nonce constraint at the SQL level.
+- Revocation is honored immediately — `findByLocal` filters on `revoked_at IS NULL`, and revocation is one row update.
+- On-chain RPC failures don't break clinical workflows: the federated driver wraps on-chain calls in try/catch and returns local-only results if the RPC is unavailable.
+
+### Limits
+
+- Hospital cannot **write** to the on-chain side. The patient owns their wallet's private key. Anything that requires a write — minting a new on-chain record, revoking a grant the patient holds on-chain — must go through the patient's mobile app.
+- Pagination across the merged dataset is currently best-effort: the federated driver returns an opaque `nextCursor` of `'federation-cursor-not-yet-supported'` when more results exist. Callers that need real pagination should query each side directly.
+- The federated `verifyAuditChain` is the local-side hash chain only. On-chain audit integrity comes from Solana consensus, not from a hash chain — there's nothing meaningful to "verify" client-side.
 
 ## `MEDIHIVE_PROFILE=onchain` — Solana-anchored, patient-sovereign
 

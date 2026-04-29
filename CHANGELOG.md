@@ -5,6 +5,48 @@ All notable changes to MediHive will be documented here. Format follows
 follows [Semantic Versioning](https://semver.org/) where reasonable for a
 pre-1.0 codebase.
 
+## [0.4.0] — 2026-04-29
+
+The federation release. A hospital running the local profile can now serve **read-only** patient-sovereign records from Solana when the patient has signed a bridge between their on-chain wallet and the hospital's local passport. Hospitals never write on-chain.
+
+### Added
+
+- **`MEDIHIVE_PROFILE=federated`** — third profile, alongside `local` and `onchain`.
+- **`@medi-hive/local-vault`** new exports:
+  - `PatientBridgeStore` — Postgres-backed bridge linkage store.
+  - `Ed25519BridgeVerifier` — verifies wallet signatures over canonicalized bridge payloads using Node's built-in crypto (no extra deps).
+  - `FederatedVaultDriver` — wraps a `LocalVaultDriver` (writes go here) and a read-only on-chain `VaultDriver` (records the patient curated). Reads merge sorted by `createdAt`. On-chain RPC failures degrade gracefully — local reads still return.
+  - `canonicalizeBridge` and `BridgePayload` — canonical JSON for the signed bridge envelope.
+- **Schema migration `002_bridges.sql`** — `patient_bridges` table with:
+  - Composite identity (local_passport_id, onchain_passport_id) — at least one must be non-null.
+  - Patient-side per-record-type allowlist (`onchain_record_types`).
+  - Detached Ed25519 signature + nonce + timestamp for `patient_signed` bridges.
+  - Revocation column so a patient can disable a previous link without losing the audit row.
+  - Functional unique index on the (local, onchain) pair while `revoked_at IS NULL`.
+- **`POST /api/patient/v2/bridge`** — patient-signed bridge link endpoint. Returns 400 on bad signature or stale timestamp, 403 on auth-pubkey mismatch, 404 on non-federated profiles.
+- **`DELETE /api/patient/v2/bridge/:id`** — patient-initiated revocation.
+- **21 new tests** covering bridge store, Ed25519 verifier, federated driver merge logic, signature timestamp skew, type allowlist filtering, on-chain RPC failure resilience, write-only-to-local enforcement, and the full HTTP bridge-link flow.
+
+### Changed
+
+- **`vaultMiddleware`** signature now accepts either a bare `VaultDriver` (legacy) or `{ driver, bridgeStore }` (federated). Backward-compatible.
+- **`AppEnv.Variables`** gains `bridgeStore?: PatientBridgeStore` for routes on federated profile.
+- **api-server `vault.ts`** factory now returns a `VaultContext` exposing both the driver and the optional bridge store. The legacy `createVaultDriver` function still works.
+- **`vitest.config.ts`** added to both `local-vault` and `api-server` to force serial execution of integration tests (they share a Postgres DB and TRUNCATE between tests).
+- **`db.ts`** wraps `Firestore.settings()` in try/catch so module re-import across test files doesn't fatally throw.
+
+### Test count
+
+| Suite | Tests |
+|---|---|
+| local-vault audit-chain (unit) | 7 |
+| local-vault driver (Postgres integration) | 17 |
+| local-vault federation (bridge + Ed25519 + federated driver) | 15 |
+| shield-encryption (Shamir + crypto) | 48 |
+| api-server patient routes via vault (HTTP integration) | 7 |
+| api-server bridge endpoint (HTTP integration) | 6 |
+| **Total** | **100** |
+
 ## [0.3.0] — 2026-04-29
 
 The credibility release. Closes the largest gap from v0.2.0: the api-server now actually uses the VaultDriver instead of going through Firestore at every endpoint.
