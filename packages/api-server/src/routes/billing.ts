@@ -2,8 +2,63 @@ import { Hono } from 'hono';
 import { createHash } from 'crypto';
 import { AppEnv } from '../types';
 import { collections, db } from '../db';
+import { GrantStatus } from '@medi-hive/vault-driver';
 
 export const billingRoutes = new Hono<AppEnv>();
+
+// ─────────────────────────────────────────────────────────────────────
+// VaultDriver-backed endpoints (v2)
+//
+// Billing returns only the icdCodesHash field, never the content. The
+// hash is salted with a per-claim salt before exposing it to the
+// client so two billing reads aren't trivially correlatable. No PHI.
+// ─────────────────────────────────────────────────────────────────────
+
+billingRoutes.get('/v2/patients/:passportId/codes', async (c) => {
+  const auth = c.get('auth') as { pubkey: string };
+  const vault = c.get('vault');
+  const passportId = c.req.param('passportId');
+
+  const passport = await vault.getPassport(passportId);
+  if (!passport) return c.json({ error: 'Patient passport not found' }, 404);
+
+  const grant = await vault.findActiveGrant(passportId, auth.pubkey);
+  if (!grant || grant.status !== GrantStatus.Active || !grant.scope.read) {
+    return c.json({ error: 'No active read grant for billing' }, 403);
+  }
+
+  const result = await vault.listRecordsForPatient(passportId, {
+    types: grant.scope.recordTypes,
+    limit: 500,
+  });
+
+  const claimSalt = createHash('sha256')
+    .update(`${passportId}:${grant.id}:${Date.now()}`)
+    .digest('hex')
+    .slice(0, 16);
+  const codes = result.records.map((r) => ({
+    recordId: r.id,
+    recordType: r.recordType,
+    createdAt: r.createdAt,
+    saltedIcdCodesHash: createHash('sha256')
+      .update(claimSalt + r.icdCodesHash)
+      .digest('hex'),
+  }));
+
+  try { await vault.recordGrantAccess(grant.id); } catch { /* best-effort */ }
+  try {
+    await vault.appendAudit({
+      actor: auth.pubkey,
+      action: 'view' as never,
+      targetPatient: passportId,
+      ipHash: '00'.repeat(32),
+      deviceHash: '00'.repeat(32),
+      metadata: `billing codes view via grant ${grant.id}`,
+    });
+  } catch { /* best-effort */ }
+
+  return c.json({ codes, grantId: grant.id, claimSalt });
+});
 
 // GET /api/billing/patient/:id/codes — View ICD-10/CPT codes (no clinical data)
 billingRoutes.get('/patient/:id/codes', async (c) => {

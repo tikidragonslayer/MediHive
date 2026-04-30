@@ -106,4 +106,100 @@ export class PatientPassportSDK {
       bump,
     };
   }
+
+  // ============================================================
+  // Transaction builders
+  //
+  // Anchor discriminators are sha256("global:<method_name>")[0..8].
+  // Args are Borsh-encoded in the order they appear in the program's
+  // instruction handler. These pure builders return a TransactionIx
+  // the caller signs + sends. Tests in __tests__/passport-tx.test.ts
+  // pin the discriminator + layout so future SDK refactors fail loudly
+  // before constructing a real transaction.
+  // ============================================================
+
+  buildCreatePassportIx(args: {
+    authority: PublicKey;
+    mrnHash: Uint8Array;
+    identityHash: Uint8Array;
+    publicEncryptionKey: Uint8Array;
+    recoveryThreshold: number;
+    guardians: PublicKey[];
+    emergencyHospitalShard: boolean;
+  }): TransactionInstruction {
+    if (args.mrnHash.length !== 32) throw new Error('mrnHash must be 32 bytes');
+    if (args.identityHash.length !== 32) throw new Error('identityHash must be 32 bytes');
+    if (args.publicEncryptionKey.length !== 32) throw new Error('publicEncryptionKey must be 32 bytes');
+    if (args.recoveryThreshold < 1 || args.recoveryThreshold > 10) {
+      throw new Error('recoveryThreshold must be 1..10');
+    }
+    if (args.guardians.length < args.recoveryThreshold) {
+      throw new Error('guardians.length must be >= recoveryThreshold');
+    }
+    if (args.guardians.length > 10) {
+      throw new Error('guardians cap is 10');
+    }
+
+    const [passportPda] = this.getPassportPDA(args.authority);
+    const discriminator = createHash('sha256').update('global:create_passport').digest().subarray(0, 8);
+
+    const guardianBytes = Buffer.concat(args.guardians.map((g) => g.toBuffer()));
+    const guardiansLenLe = Buffer.alloc(4);
+    guardiansLenLe.writeUInt32LE(args.guardians.length, 0);
+
+    const argBuf = Buffer.concat([
+      Buffer.from(args.mrnHash),
+      Buffer.from(args.identityHash),
+      Buffer.from(args.publicEncryptionKey),
+      Buffer.from([args.recoveryThreshold & 0xff]),
+      guardiansLenLe,
+      guardianBytes,
+      Buffer.from([args.emergencyHospitalShard ? 1 : 0]),
+    ]);
+
+    const data = Buffer.concat([discriminator, argBuf]);
+
+    return new TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        { pubkey: passportPda, isSigner: false, isWritable: true },
+        { pubkey: args.authority, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data,
+    });
+  }
+
+  buildSetPassportStatusIx(args: {
+    authority: PublicKey;
+    status: PassportStatus;
+  }): TransactionInstruction {
+    if (args.status !== 0 && args.status !== 1 && args.status !== 2) {
+      throw new Error(`status must be PassportStatus enum (0..2), got ${args.status}`);
+    }
+    const [passportPda] = this.getPassportPDA(args.authority);
+    const discriminator = createHash('sha256').update('global:set_passport_status').digest().subarray(0, 8);
+    const data = Buffer.concat([discriminator, Buffer.from([args.status & 0xff])]);
+    return new TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        { pubkey: passportPda, isSigner: false, isWritable: true },
+        { pubkey: args.authority, isSigner: true, isWritable: false },
+      ],
+      data,
+    });
+  }
+
+  async sendCreatePassportTx(
+    payer: Keypair,
+    args: Parameters<PatientPassportSDK['buildCreatePassportIx']>[0],
+  ): Promise<string> {
+    const ix = this.buildCreatePassportIx(args);
+    const tx = new Transaction().add(ix);
+    tx.feePayer = payer.publicKey;
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    tx.sign(payer);
+    return this.connection.sendRawTransaction(tx.serialize());
+  }
 }

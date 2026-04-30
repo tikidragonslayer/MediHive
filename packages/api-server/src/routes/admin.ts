@@ -1,8 +1,75 @@
 import { Hono } from 'hono';
 import { AppEnv } from '../types';
 import { db, collections } from '../db';
+import { AuditAction } from '@medi-hive/vault-driver';
 
 export const adminRoutes = new Hono<AppEnv>();
+
+// ─────────────────────────────────────────────────────────────────────
+// VaultDriver-backed endpoints (v2)
+//
+// Admin role has audit:all permission. The v2 audit endpoint hits the
+// vault driver's listAuditForPatient / verifyAuditChain so an
+// administrator can spot-check chain integrity from the UI.
+// ─────────────────────────────────────────────────────────────────────
+
+adminRoutes.get('/v2/audit/:passportId', async (c) => {
+  const auth = c.get('auth') as { pubkey: string; permissions: string[] };
+  const vault = c.get('vault');
+  const passportId = c.req.param('passportId');
+
+  if (!auth.permissions.includes('audit:all')) {
+    return c.json({ error: 'Forbidden: requires audit:all permission' }, 403);
+  }
+
+  const url = new URL(c.req.url);
+  const since = url.searchParams.get('since')
+    ? parseInt(url.searchParams.get('since')!, 10)
+    : undefined;
+  const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '500', 10), 5000);
+
+  const entries = await vault.listAuditForPatient(passportId, { since, limit });
+
+  try {
+    await vault.appendAudit({
+      actor: auth.pubkey,
+      action: AuditAction.Export,
+      targetPatient: passportId,
+      ipHash: '00'.repeat(32),
+      deviceHash: '00'.repeat(32),
+      metadata: `admin audit:all read (${entries.length} entries)`,
+    });
+  } catch { /* best-effort */ }
+
+  return c.json({ entries, count: entries.length });
+});
+
+adminRoutes.get('/v2/audit-verify', async (c) => {
+  const auth = c.get('auth') as { pubkey: string; permissions: string[] };
+  const vault = c.get('vault');
+
+  if (!auth.permissions.includes('audit:all')) {
+    return c.json({ error: 'Forbidden: requires audit:all permission' }, 403);
+  }
+
+  const url = new URL(c.req.url);
+  const fromSeq = parseInt(url.searchParams.get('fromSeq') ?? '1', 10);
+  const toSeq = parseInt(url.searchParams.get('toSeq') ?? '1000', 10);
+
+  try {
+    const result = await vault.verifyAuditChain(fromSeq, toSeq);
+    return c.json({
+      valid: result.valid,
+      rootHash: result.rootHash,
+      entryCount: result.entries.length,
+      fromSeq,
+      toSeq,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'verifyAuditChain failed';
+    return c.json({ error: msg }, 501);
+  }
+});
 
 // GET /api/admin/dashboard — Hospital command center metrics
 adminRoutes.get('/dashboard', async (c) => {

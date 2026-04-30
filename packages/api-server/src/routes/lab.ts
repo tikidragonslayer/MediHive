@@ -1,8 +1,49 @@
 import { Hono } from 'hono';
 import { AppEnv } from '../types';
 import { collections } from '../db';
+import { GrantStatus, RecordType } from '@medi-hive/vault-driver';
 
 export const labRoutes = new Hono<AppEnv>();
+
+// ─────────────────────────────────────────────────────────────────────
+// VaultDriver-backed endpoints (v2)
+// Lab reads are scoped to lab records.
+// ─────────────────────────────────────────────────────────────────────
+
+labRoutes.get('/v2/patients/:passportId/results', async (c) => {
+  const auth = c.get('auth') as { pubkey: string };
+  const vault = c.get('vault');
+  const passportId = c.req.param('passportId');
+
+  const passport = await vault.getPassport(passportId);
+  if (!passport) return c.json({ error: 'Patient passport not found' }, 404);
+
+  const grant = await vault.findActiveGrant(passportId, auth.pubkey);
+  if (!grant || grant.status !== GrantStatus.Active || !grant.scope.read) {
+    return c.json({ error: 'No active read grant for lab' }, 403);
+  }
+  if (!grant.scope.recordTypes.includes(RecordType.Lab)) {
+    return c.json({ error: "Grant scope does not include 'lab' record type" }, 403);
+  }
+
+  const result = await vault.listRecordsForPatient(passportId, {
+    types: [RecordType.Lab],
+    limit: 100,
+  });
+  try { await vault.recordGrantAccess(grant.id); } catch { /* best-effort */ }
+  try {
+    await vault.appendAudit({
+      actor: auth.pubkey,
+      action: 'view' as never,
+      targetPatient: passportId,
+      ipHash: '00'.repeat(32),
+      deviceHash: '00'.repeat(32),
+      metadata: `lab result view via grant ${grant.id}`,
+    });
+  } catch { /* best-effort */ }
+
+  return c.json({ ...result, grantId: grant.id });
+});
 
 // GET /api/lab/orders — Pending lab orders
 labRoutes.get('/orders', async (c) => {

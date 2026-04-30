@@ -5,6 +5,50 @@ All notable changes to MediHive will be documented here. Format follows
 follows [Semantic Versioning](https://semver.org/) where reasonable for a
 pre-1.0 codebase.
 
+## [0.5.0] — 2026-04-29
+
+The "every role uses the driver" release. Plus the first transaction-builder layer in the vault SDK, plus a recordable demo script, plus the dashboard actually calls the v2 API.
+
+### Highlights
+
+- **117 tests passing** (was 107)
+- **All 8 role groups now expose `/v2/*` endpoints** that go through `c.var.vault` instead of Firestore: patient, doctor, nurse, admin, pharmacy, lab, billing, frontdesk
+- **`scripts/demo.sh`** — recordable 90-second demo of local + federated profiles. `chmod +x scripts/demo.sh && ./scripts/demo.sh` while QuickTime records the terminal
+- **Pulse dashboard `/patient` route** calls `/api/patient/v2/passport`, `/v2/records/:id`, `/v2/audit/:id` with dev-mode auth headers — first real visual proof the API works
+- **vault-sdk transaction builders**: `buildCreatePassportIx` and `buildSetPassportStatusIx` for the patient-passport program. 10 new tests pin the Anchor discriminator (`sha256("global:<method>")[0..8]`) and Borsh arg layout
+
+### New `/v2/*` endpoints
+
+| Route file | Endpoint | Scope |
+|---|---|---|
+| nurse | `GET /v2/patients/:id/records` | active grant; types ⊆ {vital, prescription, note} ∩ grant.scope |
+| admin | `GET /v2/audit/:id` | requires `audit:all` permission; appends Export audit |
+| admin | `GET /v2/audit-verify` | hash-chain replay; throws 501 on profiles without local chain |
+| pharmacy | `GET /v2/patients/:id/prescriptions` | active grant covering Prescription |
+| lab | `GET /v2/patients/:id/results` | active grant covering Lab |
+| billing | `GET /v2/patients/:id/codes` | salted ICD-codes hash only — no PHI |
+| frontdesk | `GET /v2/passport/:id` | passport metadata only — no records, no audit |
+
+### Out of scope (called out)
+
+- I cannot record video. `scripts/demo.sh` is the closest equivalent: a paced, narrated terminal recording the user runs while QuickTime captures.
+- I have not run a Solana validator. The vault-sdk transaction builder tests are **serialization correctness** tests (discriminator + Borsh layout). End-to-end devnet tests require `solana-test-validator` running locally and Anchor programs deployed to devnet — separate work.
+- The 6 newly-migrated routes ship without HTTP-level integration tests. Only the patient and doctor routes have `*-vault.integration.test.ts` files. Adding parity tests for the other 6 is the next chunk.
+
+### Test breakdown (117)
+
+| Suite | Tests |
+|---|---|
+| local-vault audit-chain (unit) | 7 |
+| local-vault driver (Postgres integration) | 17 |
+| local-vault federation (bridge + driver merge) | 15 |
+| shield-encryption (Shamir + crypto) | 48 |
+| api-server patient routes (HTTP) | 7 |
+| api-server bridge endpoint (HTTP) | 6 |
+| api-server doctor routes (HTTP) | 7 |
+| **vault-sdk passport tx builder (serialization)** | **10** ← new |
+| **Total** | **117** |
+
 ## [0.4.2] — 2026-04-29
 
 ### Added

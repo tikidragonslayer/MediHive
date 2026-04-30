@@ -4,6 +4,38 @@ import { collections } from '../db';
 
 export const frontdeskRoutes = new Hono<AppEnv>();
 
+// ─────────────────────────────────────────────────────────────────────
+// VaultDriver-backed endpoints (v2)
+//
+// Frontdesk has 'passport:basic' permission. This endpoint returns
+// only public passport metadata — no records, no audit. Used at
+// check-in to verify a real, active passport.
+// ─────────────────────────────────────────────────────────────────────
+
+frontdeskRoutes.get('/v2/passport/:passportId', async (c) => {
+  const auth = c.get('auth') as { pubkey: string; permissions: string[] };
+  const vault = c.get('vault');
+  const passportId = c.req.param('passportId');
+
+  if (!auth.permissions.includes('passport:basic')) {
+    return c.json({ error: 'Forbidden: requires passport:basic permission' }, 403);
+  }
+
+  const passport = await vault.getPassport(passportId);
+  if (!passport) return c.json({ error: 'Passport not found' }, 404);
+
+  return c.json({
+    passport: {
+      id: passport.id,
+      status: passport.status,
+      recoveryThreshold: passport.recoveryThreshold,
+      guardianCount: passport.guardians.length,
+      emergencyHospitalShard: passport.emergencyHospitalShard,
+      createdAt: passport.createdAt,
+    },
+  });
+});
+
 // POST /api/frontdesk/checkin — Process patient check-in
 frontdeskRoutes.post('/checkin', async (c) => {
   const { patientId, appointmentId } = await c.req.json();
