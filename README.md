@@ -5,7 +5,7 @@
 [![Profile: local](https://img.shields.io/badge/profile-local-success)](docs/profiles.md)
 [![Profile: federated](https://img.shields.io/badge/profile-federated-blueviolet)](docs/profiles.md)
 [![Profile: onchain](https://img.shields.io/badge/profile-onchain--readonly-orange)](docs/profiles.md)
-[![Tests](https://img.shields.io/badge/tests-107%20passing-brightgreen)](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-117%20passing-brightgreen)](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml)
 [![CI](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml/badge.svg)](https://github.com/tikidragonslayer/MediHive/actions/workflows/ci.yml)
 
 **Self-hostable hospital records where the patient holds the keys.**

@@ -1,8 +1,56 @@
 import { Hono } from 'hono';
 import { AppEnv } from '../types';
 import { collections } from '../db';
+import { GrantStatus, RecordType } from '@medi-hive/vault-driver';
 
 export const nurseRoutes = new Hono<AppEnv>();
+
+// ─────────────────────────────────────────────────────────────────────
+// VaultDriver-backed endpoints (v2)
+//
+// Nurses read records on the same active-grant model as doctors but
+// typically with narrower scope (vital + medication record types).
+// Authorization decisions live in the driver.
+// ─────────────────────────────────────────────────────────────────────
+
+nurseRoutes.get('/v2/patients/:passportId/records', async (c) => {
+  const auth = c.get('auth') as { pubkey: string };
+  const vault = c.get('vault');
+  const passportId = c.req.param('passportId');
+
+  const passport = await vault.getPassport(passportId);
+  if (!passport) return c.json({ error: 'Patient passport not found' }, 404);
+
+  const grant = await vault.findActiveGrant(passportId, auth.pubkey);
+  if (!grant || grant.status !== GrantStatus.Active || !grant.scope.read) {
+    return c.json({ error: 'No active read grant for this nurse' }, 403);
+  }
+
+  const url = new URL(c.req.url);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 500);
+  const requested = (url.searchParams.get('types') ?? 'vital,prescription,note')
+    .split(',')
+    .filter((t) => Object.values(RecordType).includes(t as RecordType)) as RecordType[];
+  const types = requested.filter((t) => grant.scope.recordTypes.includes(t));
+  if (types.length === 0) {
+    return c.json({ records: [], hint: "Requested types are outside the grant's scope." });
+  }
+
+  const result = await vault.listRecordsForPatient(passportId, { limit, types });
+  try { await vault.recordGrantAccess(grant.id); } catch { /* best-effort */ }
+  try {
+    await vault.appendAudit({
+      actor: auth.pubkey,
+      action: 'view' as never,
+      targetPatient: passportId,
+      ipHash: '00'.repeat(32),
+      deviceHash: '00'.repeat(32),
+      metadata: `nurse view via grant ${grant.id}`,
+    });
+  } catch { /* best-effort */ }
+
+  return c.json({ ...result, grantId: grant.id });
+});
 
 // GET /api/nurse/tasks — Optimized task queue for this nurse
 nurseRoutes.get('/tasks', async (c) => {
