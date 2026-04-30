@@ -1,7 +1,7 @@
 # MediHive
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Version](https://img.shields.io/badge/version-0.3.0-informational)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-informational)](CHANGELOG.md)
 [![Profile: local](https://img.shields.io/badge/profile-local-success)](docs/profiles.md)
 [![Profile: federated](https://img.shields.io/badge/profile-federated-blueviolet)](docs/profiles.md)
 [![Profile: onchain](https://img.shields.io/badge/profile-onchain--readonly-orange)](docs/profiles.md)
@@ -82,7 +82,7 @@ npm install   # `prepare` scripts auto-build dependent packages
 DATABASE_URL=postgres://medihive:medihive_dev@127.0.0.1:5432/medihive \
   npm run migrate --workspace=@medi-hive/local-vault
 
-# 4. Run all tests (79 passing)
+# 4. Run all tests (117 passing)
 DATABASE_URL=postgres://medihive:medihive_dev@127.0.0.1:5432/medihive \
   npm test
 
