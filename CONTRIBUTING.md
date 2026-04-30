@@ -104,7 +104,7 @@ Open a GitHub issue with:
 - What you expected to happen
 - What actually happened
 - Steps to reproduce (smallest possible example)
-- Environment (OS, Node version, profile = `onchain` or `local`)
+- Environment (OS, Node version, profile = `local`, `federated`, or `onchain`)
 
 For **security-sensitive bugs**, do not open a public issue. See
 [`SECURITY.md`](SECURITY.md) for the disclosure process.

@@ -6,6 +6,10 @@
     "seed": "tsx seed/seed-firestore.ts",
     "seed:emulator": "FIRESTORE_EMULATOR_HOST=localhost:8080 tsx seed/seed-firestore.ts"
   },
+  "overrides": {
+    "@tootallnate/once": "^3.0.0",
+    "fast-xml-parser": "^5.7.0"
+  },
   "dependencies": {
     "firebase-admin": "^13.7.0"
   },
